@@ -10,6 +10,7 @@ interface ComBridgeApi {
   sendCommand: (command: string) => Promise<{ ok: boolean }>
   onData: (handleData: (data: string) => void) => void
   connect: (path: string) => void
+  send: (command: string) => void
 }
 
 interface Window {

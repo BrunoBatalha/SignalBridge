@@ -1,6 +1,5 @@
 import { defineConfig } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
-import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 
 export default defineConfig({
@@ -26,12 +25,17 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
+      },
+    },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'index.html') },
       },
       outDir: 'out/renderer',
     },
-    plugins: [vue(), tailwindcss()],
+    plugins: [vue()],
   },
 })

@@ -7,6 +7,7 @@ interface ISerialPortManager {
     listPorts: () => Promise<SerialPortInfo[]>
     onData: (handleData: (data: string) => void) => void
     connect: (path: string) => void
+    send: (command: string) => void
 }
 
 class SerialPortElectron implements ISerialPortManager {
@@ -18,6 +19,9 @@ class SerialPortElectron implements ISerialPortManager {
     }
     connect(path:string) {
         window.comBridge!.connect(path)
+    }
+    send(command: string) {
+        window.comBridge!.send(command)
     }
 }
 

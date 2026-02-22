@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('comBridge', {
     return () => ipcRenderer.off('com:onData', handler)
   },
   connect: (path: string) => ipcRenderer.send('com:connect', { path }),
+  send: (command:string) => ipcRenderer.send('com:send', { command }),
 })

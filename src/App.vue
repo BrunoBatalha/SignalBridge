@@ -1,48 +1,142 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
+import { Copy, Send } from 'lucide-vue-next'
 import { serialPortManager } from './services/SerialPortManager'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const ports = ref<SerialPortInfo[]>([])
 const selectedPathPort = ref('')
+const connectedPort = ref('')
 const command = ref('')
 const logs = ref<string[]>(['SignalBridge iniciado.'])
+const commandHistory = ref<string[]>([])
+const sendingCommandIndex = ref<number | null>(null)
+const copiedIndex = ref<number | null>(null)
+const isScrollFrozen = ref(false)
+const bufferedLogs = ref<string[]>([])
+
+const isHighlightModalOpen = ref(false)
+const highlightTermInput = ref('')
+const highlightedTerms = ref<{ term: string, color: string }[]>([])
+const showOnlyHighlighted = ref(false)
+
+const filteredLogs = computed(() => {
+  if (!showOnlyHighlighted.value || highlightedTerms.value.length === 0) {
+    return logs.value
+  }
+  
+  return logs.value.filter(log => {
+    return highlightedTerms.value.some(({ term }) => {
+      const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(escapedTerm, 'i')
+      return regex.test(log)
+    })
+  })
+})
+
+function addHighlightTerm() {
+  const term = highlightTermInput.value.trim()
+  if (term && !highlightedTerms.value.some(t => t.term === term)) {
+    const hue = Math.floor(Math.random() * 360)
+    const color = `hsl(${hue}, 70%, 80%)`
+    highlightedTerms.value.push({ term, color })
+    highlightTermInput.value = ''
+  }
+}
+
+function removeHighlightTerm(term: string) {
+  highlightedTerms.value = highlightedTerms.value.filter(t => t.term !== term)
+}
+
+function formatLog(log: string) {
+  if (highlightedTerms.value.length === 0) return log
+
+  let formattedLog = log
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  highlightedTerms.value.forEach(({ term, color }) => {
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`(${escapedTerm})`, 'gi')
+    formattedLog = formattedLog.replace(regex, `<span style="background-color: ${color}; color: #000; padding: 0 2px; border-radius: 2px;">$1</span>`)
+  })
+
+  return formattedLog
+}
+
+function addLog(message: string) {
+  if (isScrollFrozen.value) {
+    bufferedLogs.value.unshift(message)
+  } else {
+    logs.value.unshift(message)
+  }
+}
+
+watch(isScrollFrozen, (frozen) => {
+  if (!frozen && bufferedLogs.value.length > 0) {
+    logs.value.unshift(...bufferedLogs.value)
+    bufferedLogs.value = []
+  }
+})
 
 async function refreshPorts() {
-  if (!window.comBridge) {
-    logs.value.unshift('Bridge Electron indisponível (modo web).')
-    return
-  }
-
   ports.value = await serialPortManager.listPorts()
 
   if (!ports.value.some((port) => port.path === selectedPathPort.value)) {
     selectedPathPort.value = ports.value[0]?.path ?? ''
   }
 
-  logs.value.unshift(`Portas detectadas: ${ports.value.length}`)
+  addLog(`Port as detectadas: ${ports.value.length}`)
 }
 
 async function send() {
-  if (!command.value.trim()) return
-
-  if (!window.comBridge) {
-    logs.value.unshift(`TX${selectedPathPort.value ? ` (${selectedPathPort.value})` : ''} > ${command.value}`)
-    command.value = ''
-    return
-  }
-
-  await window.comBridge.sendCommand(command.value)
+  commandHistory.value.unshift(command.value)
+  serialPortManager.send(command.value)
   command.value = ''
 }
 
-async function connect(){
-  console.log('Conectando na porta', selectedPathPort.value)
+function resendCommand(cmd: string) {
+  const index = commandHistory.value.indexOf(cmd)
+  sendingCommandIndex.value = index
+  serialPortManager.send(cmd)
+}
+
+async function copyCommand(cmd: string, index: number) {
+  try {
+    await navigator.clipboard.writeText(cmd)
+    copiedIndex.value = index
+    setTimeout(() => {
+      if (copiedIndex.value === index) {
+        copiedIndex.value = null
+      }
+    }, 2000)
+  } catch (err) {
+    console.error('Falha ao copiar comando:', err)
+  }
+}
+
+function connect(){
+  if (connectedPort.value === selectedPathPort.value) return
+
   serialPortManager.connect(selectedPathPort.value)
+  connectedPort.value = selectedPathPort.value
 
   serialPortManager.onData((data) => {
-    logs.value.unshift(`RX${selectedPathPort.value ? ` (${selectedPathPort.value})` : ''} > ${data}`)
+    addLog(`${selectedPathPort.value ? ` (${selectedPathPort.value})` : ''} > ${data}`)
   })
 }
+
 
 let unsubscribe: (() => void) | undefined
 
@@ -55,69 +149,216 @@ onUnmounted(() => {
 })
 </script>
 
+<style scoped>
+button {
+  transition: all 300ms ease-in-out;
+}
+
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-fill {
+  animation: fill 500ms ease-in-out forwards;
+}
+</style>
+
 <template>
-  <main class="min-h-screen bg-slate-950 text-slate-100">
-    <div class="mx-auto max-w-5xl p-6 md:p-10">
-      <header class="mb-6">
-        <h1 class="text-3xl font-bold">SignalBridge</h1>
-        <p class="mt-2 text-slate-300">Monitor COM, logs em tempo real e envio de comandos.</p>
+  <main class="min-h-screen bg-background p-6 md:p-10">
+    <div class="mx-auto max-w-5xl space-y-6">
+      <header class="space-y-2">
+        <h1 class="text-3xl font-bold tracking-tight">SignalBridge</h1>
+        <p class="text-muted-foreground">Monitor COM, logs em tempo real e envio de comandos.</p>
       </header>
 
-      <section class="grid gap-6 md:grid-cols-2">
-        <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">Portas COM</h2>
-            <button class="rounded-md bg-slate-100 px-3 py-1 text-sm font-medium text-slate-900" @click="refreshPorts">
+      <Card>
+        <CardHeader>
+          <div class="flex items-center justify-between">
+            <CardTitle>Portas COM</CardTitle>
+            <Button variant="outline" size="sm" @click="refreshPorts">
               Atualizar
-            </button>
+            </Button>
+          </div>
+          <CardDescription>Selecione a porta serial para conectar</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="space-y-2">
+            <Label for="port-select">Porta</Label>
+            <div class="flex gap-2">
+              <Select v-model="selectedPathPort">
+                <SelectTrigger id="port-select" class="flex-1">
+                  <SelectValue placeholder="Escolha uma porta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="port in ports" :key="port.path" :value="port.path">
+                    {{ port.friendlyName || port.path }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Button @click="connect" :disabled="selectedPathPort === connectedPort">
+                Conectar
+              </Button>
+            </div>
           </div>
 
-          <label class="mb-2 block text-sm text-slate-300" for="port-select">Selecione a porta</label>
-          <div class="flex">
-          <div class="relative flex-1">
-            <select
-              id="port-select"
-              v-model="selectedPathPort"
-              class="w-full appearance-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 pr-10 text-sm text-slate-100 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30"
-            >
-              <option disabled value="">Escolha uma porta</option>
-              <option v-for="port in ports" :key="port.path" :value="port.path">
-                {{ port.friendlyName || port.path }}
-              </option>
-            </select>
-            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">▾</span>
-          </div>
-          <button class="ml-2 rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950" @click="connect">
-            Conectar
-          </button>
-          </div>
+          <p v-if="selectedPathPort" class="text-sm text-muted-foreground">
+            Porta selecionada: <span class="font-medium text-foreground">{{ selectedPathPort }}</span>
+          </p>
+          <p v-else class="text-sm text-muted-foreground">
+            Nenhuma porta carregada.
+          </p>
+        </CardContent>
+      </Card>
 
-          <p v-if="selectedPathPort" class="mt-2 text-xs text-emerald-300">Porta selecionada: {{ selectedPathPort }}</p>
-          <p v-else class="mt-2 text-xs text-slate-400">Nenhuma porta carregada.</p>
+      <div class="grid gap-6 grid-cols-2">
+        <div class="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between">
+                <div class="space-y-1.5">
+                  <CardTitle>Logs</CardTitle>
+                  <CardDescription>Mensagens recebidas em tempo real</CardDescription>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                  <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                      <input type="checkbox" id="show-highlighted" v-model="showOnlyHighlighted" class="h-4 w-4 rounded border-primary text-primary focus:ring-primary" />
+                      <Label for="show-highlighted" class="cursor-pointer">Apenas destacados</Label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <input type="checkbox" id="freeze-scroll" v-model="isScrollFrozen" class="h-4 w-4 rounded border-primary text-primary focus:ring-primary" />
+                      <Label for="freeze-scroll" class="cursor-pointer">Congelar Scroll</Label>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" @click="isHighlightModalOpen = true">
+                    Destacar termos
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div class="max-h-72 space-y-1 overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-sm">
+                <p v-for="(log, index) in filteredLogs" :key="`${index}-${log}`" class="text-foreground" v-html="formatLog(log)">
+                </p>
+              </div>
+              <p v-if="bufferedLogs.length > 0" class="text-xs text-muted-foreground mt-2 text-center">
+                {{ bufferedLogs.length }} novas mensagens (descongele para ver)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Enviar Comando</CardTitle>
+              <CardDescription>Digite um comando para enviar à porta serial</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div class="flex gap-2">
+                <Input
+                  v-model="command"
+                  placeholder="Ex.: AT+STATUS"
+                  @keyup.enter="send"
+                />
+                <Button @click="send" :disabled="!command.trim()">
+                  Enviar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-900 p-4">
-          <h2 class="mb-4 text-lg font-semibold">Enviar Comando</h2>
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de Comandos</CardTitle>
+            <CardDescription>Comandos enviados nesta sessão</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="max-h-96 space-y-2 overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-sm">
+              <div
+                v-for="(cmd, index) in commandHistory"
+                :key="`${index}-${cmd}`"
+                class="rounded bg-background p-2 text-foreground hover:bg-muted transition-colors flex items-center justify-between gap-2 relative overflow-hidden"
+              >
+                <div
+                  v-if="sendingCommandIndex === index"
+                  class="absolute inset-0 bg-primary/20 origin-left animate-fill rounded"
+                />
+                <span class="relative z-10 truncate">{{ cmd }}</span>
+                <div class="flex items-center gap-1 relative z-20">
+                  <div class="relative group flex items-center justify-center">
+                    <Button size="icon" variant="ghost" @click="copyCommand(cmd, index)" class="h-8 w-8">
+                      <Copy class="h-4 w-4" />
+                    </Button>
+                    <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                      {{ copiedIndex === index ? 'Copiado!' : 'Copiar comando' }}
+                    </div>
+                  </div>
+                  <div class="relative group flex items-center justify-center">
+                    <Button size="icon" variant="ghost" @click="resendCommand(cmd)" class="h-8 w-8">
+                      <Send class="h-4 w-4" />
+                    </Button>
+                    <div class="absolute right-full mr-2 top-1/2 -translate-x-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                      Reenviar comando
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p v-if="commandHistory.length === 0" class="text-muted-foreground text-center py-8">
+                Nenhum comando enviado.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+
+    <!-- Highlight Modal -->
+    <div v-if="isHighlightModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <Card class="w-full max-w-md shadow-lg">
+        <CardHeader>
+          <CardTitle>Destacar Termos</CardTitle>
+          <CardDescription>Adicione termos para destacar nos logs com cores diferentes.</CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
           <div class="flex gap-2">
-            <input
-              v-model="command"
-              class="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none"
-              placeholder="Ex.: AT+STATUS"
-              @keyup.enter="send"
+            <Input
+              v-model="highlightTermInput"
+              placeholder="Digite um termo..."
+              @keyup.enter="addHighlightTerm"
             />
-            <button class="rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950" @click="send">
-              Enviar
-            </button>
+            <Button @click="addHighlightTerm" :disabled="!highlightTermInput.trim()">
+              Adicionar
+            </Button>
           </div>
+          
+          <div class="flex flex-wrap gap-2 mt-4">
+            <div
+              v-for="item in highlightedTerms"
+              :key="item.term"
+              class="flex items-center gap-1 px-2 py-1 rounded text-sm text-black"
+              :style="{ backgroundColor: item.color }"
+            >
+              <span>{{ item.term }}</span>
+              <button @click="removeHighlightTerm(item.term)" class="ml-1 hover:opacity-70 font-bold">
+                &times;
+              </button>
+            </div>
+            <p v-if="highlightedTerms.length === 0" class="text-sm text-muted-foreground w-full text-center py-2">
+              Nenhum termo destacado.
+            </p>
+          </div>
+        </CardContent>
+        <div class="flex justify-end p-6 pt-0">
+          <Button variant="outline" @click="isHighlightModalOpen = false">
+            Fechar
+          </Button>
         </div>
-      </section>
-
-      <section class="mt-6 rounded-xl border border-slate-800 bg-black/40 p-4">
-        <h2 class="mb-3 text-lg font-semibold">Logs</h2>
-        <div class="max-h-72 space-y-2 overflow-auto text-sm text-emerald-300">
-          <p v-for="(log, index) in logs" :key="`${index}-${log}`" class="font-mono">{{ log }}</p>
-        </div>
-      </section>
+      </Card>
     </div>
   </main>
 </template>

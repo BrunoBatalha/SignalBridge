@@ -42,9 +42,11 @@ app.whenReady().then(() => {
       baudRate: 115200,
     })  
 
-    selectedPort.open((err) => {
-      console.log('Erro ao abrir a porta:', err)
-    })
+    // selectedPort.open((err) => {
+    //   if(err){
+    //     console.log('Erro ao abrir a porta:', err)
+    //   }
+    // })
   })
     
   ipcMain.on('com:onData', async () => {
@@ -62,10 +64,12 @@ app.whenReady().then(() => {
       })
     })
 
-  ipcMain.handle('com:send', async (_event, payload: { command: string }) => {
-    const text = payload?.command?.trim() || '[vazio]'
-    mainWindow?.webContents.send('com:log', `TX > ${text}`)
-    return { ok: true }
+  ipcMain.on('com:send', async (_event, payload: { command: string }) => {    
+    selectedPort!.write(payload.command, (err) => {
+      if(err){
+        console.error('Erro ao enviar comando:', err)
+      }
+    })
   })
 
   app.on('activate', () => {

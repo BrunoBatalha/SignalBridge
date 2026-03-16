@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
-import { Copy, Send } from 'lucide-vue-next'
+import { Copy, Send, Trash2 } from 'lucide-vue-next'
 import { serialPortManager } from './services/SerialPortManager'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +22,53 @@ const logs = ref<string[]>(['SignalBridge iniciado.'])
 const commandHistory = ref<string[]>([])
 const sendingCommandIndex = ref<number | null>(null)
 const copiedIndex = ref<number | null>(null)
+
+const favorites = ref<string[]>(
+  JSON.parse(localStorage.getItem('signalbridge_favorites') ?? '[]')
+)
+const favoriteInput = ref('')
+const copiedFavoriteIndex = ref<number | null>(null)
+const sendingFavoriteIndex = ref<number | null>(null)
+
+watch(favorites, (val) => {
+  localStorage.setItem('signalbridge_favorites', JSON.stringify(val))
+}, { deep: true })
+
+function saveFavorite() {
+  const cmd = favoriteInput.value.trim()
+  if (cmd && !favorites.value.includes(cmd)) {
+    favorites.value.push(cmd)
+    favoriteInput.value = ''
+  }
+}
+
+function removeFavorite(cmd: string) {
+  favorites.value = favorites.value.filter(f => f !== cmd)
+}
+
+async function copyFavorite(cmd: string, index: number) {
+  try {
+    await navigator.clipboard.writeText(cmd)
+    copiedFavoriteIndex.value = index
+    setTimeout(() => {
+      if (copiedFavoriteIndex.value === index) {
+        copiedFavoriteIndex.value = null
+      }
+    }, 2000)
+  } catch (err) {
+    console.error('Falha ao copiar favorito:', err)
+  }
+}
+
+function sendFavorite(cmd: string, index: number) {
+  sendingFavoriteIndex.value = index
+  serialPortManager.send(cmd)
+  setTimeout(() => {
+    if (sendingFavoriteIndex.value === index) {
+      sendingFavoriteIndex.value = null
+    }
+  }, 600)
+}
 const isScrollFrozen = ref(false)
 const bufferedLogs = ref<string[]>([])
 
@@ -43,6 +90,11 @@ const filteredLogs = computed(() => {
     })
   })
 })
+
+function clearLogs() {
+  logs.value = []
+  bufferedLogs.value = []
+}
 
 function addHighlightTerm() {
   const term = highlightTermInput.value.trim()
@@ -235,9 +287,15 @@ button {
                       <Label for="freeze-scroll" class="cursor-pointer">Congelar Scroll</Label>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" @click="isHighlightModalOpen = true">
-                    Destacar termos
-                  </Button>
+                  <div class="flex gap-2">
+                    <Button variant="outline" size="sm" @click="isHighlightModalOpen = true">
+                      Destacar termos
+                    </Button>
+                    <Button variant="outline" size="sm" @click="clearLogs" :disabled="logs.length === 0 && bufferedLogs.length === 0">
+                      <Trash2 class="h-4 w-4 mr-1" />
+                      Limpar
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -272,48 +330,111 @@ button {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico de Comandos</CardTitle>
-            <CardDescription>Comandos enviados nesta sessão</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="max-h-96 space-y-2 overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-sm">
-              <div
-                v-for="(cmd, index) in commandHistory"
-                :key="`${index}-${cmd}`"
-                class="rounded bg-background p-2 text-foreground hover:bg-muted transition-colors flex items-center justify-between gap-2 relative overflow-hidden"
-              >
+        <div class="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Histórico de Comandos</CardTitle>
+              <CardDescription>Comandos enviados nesta sessão</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div class="max-h-48 space-y-2 overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-sm">
                 <div
-                  v-if="sendingCommandIndex === index"
-                  class="absolute inset-0 bg-primary/20 origin-left animate-fill rounded"
-                />
-                <span class="relative z-10 truncate">{{ cmd }}</span>
-                <div class="flex items-center gap-1 relative z-20">
-                  <div class="relative group flex items-center justify-center">
-                    <Button size="icon" variant="ghost" @click="copyCommand(cmd, index)" class="h-8 w-8">
-                      <Copy class="h-4 w-4" />
-                    </Button>
-                    <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
-                      {{ copiedIndex === index ? 'Copiado!' : 'Copiar comando' }}
+                  v-for="(cmd, index) in commandHistory"
+                  :key="`${index}-${cmd}`"
+                  class="rounded bg-background p-2 text-foreground hover:bg-muted transition-colors flex items-center justify-between gap-2 relative overflow-hidden"
+                >
+                  <div
+                    v-if="sendingCommandIndex === index"
+                    class="absolute inset-0 bg-primary/20 origin-left animate-fill rounded"
+                  />
+                  <span class="relative z-10 truncate">{{ cmd }}</span>
+                  <div class="flex items-center gap-1 relative z-20">
+                    <div class="relative group flex items-center justify-center">
+                      <Button size="icon" variant="ghost" @click="copyCommand(cmd, index)" class="h-8 w-8">
+                        <Copy class="h-4 w-4" />
+                      </Button>
+                      <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                        {{ copiedIndex === index ? 'Copiado!' : 'Copiar comando' }}
+                      </div>
                     </div>
-                  </div>
-                  <div class="relative group flex items-center justify-center">
-                    <Button size="icon" variant="ghost" @click="resendCommand(cmd)" class="h-8 w-8">
-                      <Send class="h-4 w-4" />
-                    </Button>
-                    <div class="absolute right-full mr-2 top-1/2 -translate-x-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
-                      Reenviar comando
+                    <div class="relative group flex items-center justify-center">
+                      <Button size="icon" variant="ghost" @click="resendCommand(cmd)" class="h-8 w-8">
+                        <Send class="h-4 w-4" />
+                      </Button>
+                      <div class="absolute right-full mr-2 top-1/2 -translate-x-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                        Reenviar comando
+                      </div>
                     </div>
                   </div>
                 </div>
+                <p v-if="commandHistory.length === 0" class="text-muted-foreground text-center py-8">
+                  Nenhum comando enviado.
+                </p>
               </div>
-              <p v-if="commandHistory.length === 0" class="text-muted-foreground text-center py-8">
-                Nenhum comando enviado.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Favoritos</CardTitle>
+              <CardDescription>Comandos salvos para reuso</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-3">
+              <div class="flex gap-2">
+                <Input
+                  v-model="favoriteInput"
+                  placeholder="Ex.: AT+STATUS"
+                  @keyup.enter="saveFavorite"
+                />
+                <Button @click="saveFavorite" :disabled="!favoriteInput.trim()">
+                  Salvar
+                </Button>
+              </div>
+              <div class="max-h-48 space-y-2 overflow-auto rounded-md border bg-muted/50 p-4 font-mono text-sm">
+                <div
+                  v-for="(cmd, index) in favorites"
+                  :key="`fav-${index}-${cmd}`"
+                  class="rounded bg-background p-2 text-foreground hover:bg-muted transition-colors flex items-center justify-between gap-2 relative overflow-hidden"
+                >
+                  <div
+                    v-if="sendingFavoriteIndex === index"
+                    class="absolute inset-0 bg-primary/20 origin-left animate-fill rounded"
+                  />
+                  <span class="relative z-10 truncate">{{ cmd }}</span>
+                  <div class="flex items-center gap-1 relative z-20">
+                    <div class="relative group flex items-center justify-center">
+                      <Button size="icon" variant="ghost" @click="copyFavorite(cmd, index)" class="h-8 w-8">
+                        <Copy class="h-4 w-4" />
+                      </Button>
+                      <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                        {{ copiedFavoriteIndex === index ? 'Copiado!' : 'Copiar comando' }}
+                      </div>
+                    </div>
+                    <div class="relative group flex items-center justify-center">
+                      <Button size="icon" variant="ghost" @click="sendFavorite(cmd, index)" class="h-8 w-8">
+                        <Send class="h-4 w-4" />
+                      </Button>
+                      <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                        Enviar favorito
+                      </div>
+                    </div>
+                    <div class="relative group flex items-center justify-center">
+                      <Button size="icon" variant="ghost" @click="removeFavorite(cmd)" class="h-8 w-8 text-destructive hover:text-destructive">
+                        <Trash2 class="h-4 w-4" />
+                      </Button>
+                      <div class="absolute right-full mr-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-popover text-popover-foreground text-xs rounded px-2 py-1 whitespace-nowrap pointer-events-none shadow-md border z-50">
+                        Remover favorito
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p v-if="favorites.length === 0" class="text-muted-foreground text-center py-8">
+                  Nenhum favorito salvo.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
 

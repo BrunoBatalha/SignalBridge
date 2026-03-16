@@ -6,8 +6,11 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev --watch",
+    "dev:web": "vite --config vite.web.config.ts",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "build:web": "vite build --config vite.web.config.ts",
+    "preview": "electron-vite preview",
+    "preview:web": "vite preview --config vite.web.config.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.2.1",

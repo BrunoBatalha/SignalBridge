@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, computed, type Ref } from 'vue'
-import { Plug, Unplug, RefreshCw } from 'lucide-vue-next'
+import { Plug, Unplug, RefreshCw, HelpCircle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -21,6 +21,8 @@ const refreshPorts = inject<() => Promise<SerialPortInfo[]>>('refreshPorts')!
 const connect = inject<() => void>('connect')!
 const disconnect = inject<() => void>('disconnect')!
 
+const startTour = inject<() => void>('startTour')!
+
 const isConnected = computed(() => connectionStatus.value === 'connected')
 
 const baudRates = ['300', '1200', '2400', '4800', '9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
@@ -34,12 +36,12 @@ const baudRateModel = computed({
   <header
     class="h-12 flex items-center gap-3 px-4 bg-zinc-950 border-b border-zinc-800 shadow-inner-panel shrink-0"
   >
-    <span class="text-sm font-semibold tracking-tight text-foreground select-none">SignalBridge</span>
+    <span data-tour="app-title" class="text-sm font-semibold tracking-tight text-foreground select-none">SignalBridge</span>
 
     <div class="w-px h-5 bg-zinc-800" />
 
     <Select v-model="selectedPath" :disabled="isConnected">
-      <SelectTrigger class="w-48 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
+      <SelectTrigger data-tour="port-select" class="w-48 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
         <SelectValue placeholder="Select port" />
       </SelectTrigger>
       <SelectContent>
@@ -50,6 +52,7 @@ const baudRateModel = computed({
     </Select>
 
     <Button
+      data-tour="refresh-ports"
       size="xs"
       variant="ghost"
       class="h-8 w-8 p-0"
@@ -61,6 +64,7 @@ const baudRateModel = computed({
 
     <Button
       v-if="!isConnected"
+      data-tour="connect-btn"
       size="xs"
       variant="industrial"
       class="h-8 px-3"
@@ -76,6 +80,7 @@ const baudRateModel = computed({
 
     <Button
       v-else
+      data-tour="connect-btn"
       size="xs"
       variant="destructive"
       class="h-8 px-3"
@@ -86,6 +91,7 @@ const baudRateModel = computed({
     </Button>
 
     <Badge
+      data-tour="connection-status"
       :variant="connectionStatus === 'connected' ? 'default' : 'secondary'"
       class="text-xs gap-1.5"
     >
@@ -97,7 +103,7 @@ const baudRateModel = computed({
     </Badge>
 
     <Select v-model="baudRateModel" :disabled="isConnected">
-      <SelectTrigger class="w-32 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
+      <SelectTrigger data-tour="baud-rate" class="w-32 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
         <SelectValue placeholder="Baud rate" />
       </SelectTrigger>
       <SelectContent>
@@ -109,6 +115,15 @@ const baudRateModel = computed({
 
     <div class="flex-1" />
 
-    <span class="text-xs text-muted-foreground tabular-nums">{{ logCount }} lines</span>
+    <span data-tour="log-count" class="text-xs text-muted-foreground tabular-nums">{{ logCount }} lines</span>
+
+    <Button
+      size="xs"
+      variant="ghost"
+      class="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+      @click="startTour"
+    >
+      <HelpCircle class="h-3.5 w-3.5" />
+    </Button>
   </header>
 </template>

@@ -99,7 +99,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGlobalKey))
 <template>
   <div class="h-full flex flex-col bg-card">
     <!-- Input row -->
-    <div class="flex items-center gap-2 px-3 py-2 border-b border-zinc-800 bg-zinc-950 shrink-0 relative">
+    <div data-tour="command-bar" class="flex items-center gap-2 px-3 py-2 border-b border-zinc-800 bg-zinc-950 shrink-0 relative">
       <Terminal class="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <span class="text-xs text-muted-foreground select-none">$</span>
       <Input
@@ -139,7 +139,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleGlobalKey))
     </div>
 
     <!-- Command history -->
-    <div class="flex-1 overflow-auto">
+    <div data-tour="command-history" class="flex-1 overflow-auto">
       <div
         v-for="(cmd, idx) in commandHistory"
         :key="`${idx}-${cmd}`"

@@ -77,3 +77,66 @@
 .scrollbar-stable {
   scrollbar-gutter: stable;
 }
+
+/* Tutorial tour (driver.js) — dark theme overrides */
+.driver-popover.signalbridge-tour {
+  background-color: hsl(240 6% 8%);
+  border: 1px solid hsl(240 3.7% 20%);
+  color: hsl(0 0% 93%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.driver-popover.signalbridge-tour .driver-popover-title {
+  color: hsl(234 89% 74%);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.driver-popover.signalbridge-tour .driver-popover-description {
+  color: hsl(240 5% 65%);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.driver-popover.signalbridge-tour .driver-popover-progress-text {
+  color: hsl(240 5% 45%);
+  font-size: 0.6875rem;
+}
+
+.driver-popover.signalbridge-tour .driver-popover-prev-btn {
+  color: hsl(240 5% 65%);
+  border: 1px solid hsl(240 3.7% 20%);
+  background: transparent;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.driver-popover.signalbridge-tour .driver-popover-prev-btn:hover {
+  background: hsl(240 3.7% 15%);
+  color: hsl(0 0% 93%);
+}
+
+.driver-popover.signalbridge-tour .driver-popover-next-btn,
+.driver-popover.signalbridge-tour .driver-popover-close-btn-text {
+  background: hsl(234 89% 74%);
+  color: hsl(0 0% 5%);
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+}
+
+.driver-popover.signalbridge-tour .driver-popover-next-btn:hover,
+.driver-popover.signalbridge-tour .driver-popover-close-btn-text:hover {
+  background: hsl(234 89% 68%);
+}
+
+.driver-popover.signalbridge-tour .driver-popover-arrow-side-left .driver-popover-arrow,
+.driver-popover.signalbridge-tour .driver-popover-arrow-side-right .driver-popover-arrow,
+.driver-popover.signalbridge-tour .driver-popover-arrow-side-top .driver-popover-arrow,
+.driver-popover.signalbridge-tour .driver-popover-arrow-side-bottom .driver-popover-arrow {
+  border-color: hsl(240 3.7% 20%);
+  background-color: hsl(240 6% 8%);
+}

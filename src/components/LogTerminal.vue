@@ -54,6 +54,7 @@ function doAddHighlight() {
   <div class="h-full flex flex-col bg-card">
     <!-- Toolbar -->
     <div
+      data-tour="log-toolbar"
       class="flex items-center gap-2 px-3 h-9 border-b border-zinc-800 bg-zinc-950 shrink-0"
     >
       <Button
@@ -108,7 +109,7 @@ function doAddHighlight() {
     </div>
 
     <!-- Log viewport(s) -->
-    <div class="flex-1 overflow-hidden">
+    <div data-tour="log-viewport" class="flex-1 overflow-hidden">
       <!-- Split view when frozen -->
       <ResizablePanelGroup v-if="isFrozen" direction="horizontal" class="h-full">
         <ResizablePanel :default-size="50" :min-size="20">

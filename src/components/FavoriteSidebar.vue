@@ -47,7 +47,7 @@ async function doCopy(cmd: string, idx: number) {
 
 <template>
   <TooltipProvider :delay-duration="300">
-    <div class="h-full flex flex-col bg-card border-l border-zinc-800">
+    <div data-tour="favorites-panel" class="h-full flex flex-col bg-card border-l border-zinc-800">
       <!-- Header -->
       <div class="flex items-center gap-2 px-3 h-9 border-b border-zinc-800 bg-zinc-950 shrink-0">
         <Star class="h-3.5 w-3.5 text-muted-foreground" />

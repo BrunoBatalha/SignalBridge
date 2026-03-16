@@ -12,11 +12,13 @@ import FavoriteSidebar from '@/components/FavoriteSidebar.vue'
 import { useSerialConnection } from '@/composables/useSerialConnection'
 import { useLogStore } from '@/composables/useLogStore'
 import { useCommandStore } from '@/composables/useCommandStore'
+import { useTutorialTour } from '@/composables/useTutorialTour'
 
 // --- Composables ---
 const serial = useSerialConnection()
 const logStore = useLogStore()
 const cmdStore = useCommandStore()
+const tour = useTutorialTour()
 
 // --- Wire serial data into log store ---
 function sendCommand(cmd: string) {
@@ -64,10 +66,15 @@ provide('addToHistory', cmdStore.addToHistory)
 provide('addFavorite', cmdStore.addFavorite)
 provide('removeFavorite', cmdStore.removeFavorite)
 provide('sendCommand', sendCommand)
+provide('startTour', tour.startTour)
 
 onMounted(() => {
   logStore.appendLog('SignalBridge initialized.', 'system')
   void serial.refreshPorts()
+
+  if (tour.shouldShowTour()) {
+    setTimeout(() => tour.startTour(), 600)
+  }
 })
 </script>
 

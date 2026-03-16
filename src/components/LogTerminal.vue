@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref, inject, computed, watch, nextTick, type Ref } from 'vue'
-import { useVirtualizer } from '@tanstack/vue-virtual'
+import { ref, inject, computed, type Ref } from 'vue'
 import { Pause, Play, Filter, Highlighter, Trash2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable'
 import {
   Dialog,
   DialogContent,
@@ -12,70 +16,30 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import LogLine from './LogLine.vue'
-import { useLogMinimap } from '@/composables/useLogMinimap'
+import LogViewport from './LogViewport.vue'
 import type { LogEntry, HighlightTerm } from '@/types/log'
 
 const filteredLogs = inject<Ref<LogEntry[]>>('filteredLogs')!
+const filteredFrozenSnapshot = inject<Ref<LogEntry[]>>('filteredFrozenSnapshot')!
 const isFrozen = inject<Ref<boolean>>('isFrozen')!
-const bufferedCount = inject<Ref<number>>('bufferedCount')!
 const highlightTerms = inject<Ref<HighlightTerm[]>>('highlightTerms')!
 const showOnlyHighlighted = inject<Ref<boolean>>('showOnlyHighlighted')!
 const errorIndices = inject<Ref<number[]>>('errorIndices')!
 const warnIndices = inject<Ref<number[]>>('warnIndices')!
+const frozenErrorIndices = inject<Ref<number[]>>('frozenErrorIndices')!
+const frozenWarnIndices = inject<Ref<number[]>>('frozenWarnIndices')!
 const setFrozen = inject<(val: boolean) => void>('setFrozen')!
 const clearLogs = inject<() => void>('clearLogs')!
 const addHighlightTerm = inject<(term: string) => void>('addHighlightTerm')!
 const removeHighlightTerm = inject<(term: string) => void>('removeHighlightTerm')!
 
-const scrollEl = ref<HTMLElement | null>(null)
-const minimapCanvas = ref<HTMLCanvasElement | null>(null)
 const highlightModalOpen = ref(false)
 const highlightInput = ref('')
 
-const virtualizer = useVirtualizer(
-  computed(() => ({
-    count: filteredLogs.value.length,
-    getScrollElement: () => scrollEl.value,
-    estimateSize: () => 20,
-    overscan: 30,
-  })),
-)
-
-const virtualItems = computed(() => virtualizer.value.getVirtualItems())
-const totalSize = computed(() => virtualizer.value.getTotalSize())
-
-const viewportStart = computed(() => {
-  const items = virtualItems.value
-  return items.length > 0 ? items[0].index : 0
+const newLogsSinceFreeze = computed(() => {
+  if (!isFrozen.value) return 0
+  return Math.max(0, filteredLogs.value.length - filteredFrozenSnapshot.value.length)
 })
-const viewportEnd = computed(() => {
-  const items = virtualItems.value
-  return items.length > 0 ? items[items.length - 1].index : 0
-})
-
-function scrollToIndex(idx: number) {
-  virtualizer.value.scrollToIndex(idx, { align: 'start' })
-}
-
-const { handleClick: minimapClick } = useLogMinimap(minimapCanvas, {
-  filteredLogs,
-  errorIndices,
-  warnIndices,
-  scrollToIndex,
-  viewportStart,
-  viewportEnd,
-})
-
-// Auto-scroll to top on new data (unless frozen)
-watch(
-  () => filteredLogs.value.length,
-  () => {
-    if (!isFrozen.value) {
-      nextTick(() => virtualizer.value.scrollToIndex(0))
-    }
-  },
-)
 
 function doAddHighlight() {
   const term = highlightInput.value.trim()
@@ -103,8 +67,8 @@ function doAddHighlight() {
         {{ isFrozen ? 'Resume' : 'Freeze' }}
       </Button>
 
-      <Badge v-if="isFrozen && bufferedCount > 0" variant="secondary" class="text-xs tabular-nums">
-        +{{ bufferedCount }} buffered
+      <Badge v-if="isFrozen && newLogsSinceFreeze > 0" variant="secondary" class="text-xs tabular-nums">
+        +{{ newLogsSinceFreeze }} new
       </Badge>
 
       <div class="w-px h-4 bg-zinc-800" />
@@ -143,30 +107,38 @@ function doAddHighlight() {
       </Button>
     </div>
 
-    <!-- Log viewport + minimap -->
-    <div class="flex-1 flex overflow-hidden">
-      <div ref="scrollEl" class="flex-1 overflow-auto font-mono text-xs">
-        <div :style="{ height: `${totalSize}px`, width: '100%', position: 'relative' }">
-          <div
-            v-for="vItem in virtualItems"
-            :key="vItem.key"
-            :style="{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: `${vItem.size}px`,
-              transform: `translateY(${vItem.start}px)`,
-            }"
-          >
-            <LogLine :entry="filteredLogs[vItem.index]" />
-          </div>
-        </div>
-      </div>
-      <canvas
-        ref="minimapCanvas"
-        class="w-3 cursor-pointer shrink-0 border-l border-zinc-800"
-        @click="minimapClick"
+    <!-- Log viewport(s) -->
+    <div class="flex-1 overflow-hidden">
+      <!-- Split view when frozen -->
+      <ResizablePanelGroup v-if="isFrozen" direction="horizontal" class="h-full">
+        <ResizablePanel :default-size="50" :min-size="20">
+          <LogViewport
+            :logs="filteredFrozenSnapshot"
+            :error-indices="frozenErrorIndices"
+            :warn-indices="frozenWarnIndices"
+            :auto-scroll="false"
+            label="Frozen"
+          />
+        </ResizablePanel>
+        <ResizableHandle />
+        <ResizablePanel :default-size="50" :min-size="20">
+          <LogViewport
+            :logs="filteredLogs"
+            :error-indices="errorIndices"
+            :warn-indices="warnIndices"
+            :auto-scroll="true"
+            label="Live"
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+
+      <!-- Single view when not frozen -->
+      <LogViewport
+        v-else
+        :logs="filteredLogs"
+        :error-indices="errorIndices"
+        :warn-indices="warnIndices"
+        :auto-scroll="true"
       />
     </div>
 

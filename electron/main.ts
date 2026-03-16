@@ -36,10 +36,10 @@ app.whenReady().then(() => {
     }))
   })
 
-  ipcMain.on('com:connect', async (_event, payload: { path: string }) => {   
+  ipcMain.on('com:connect', async (_event, payload: { path: string; baudRate: number }) => {
     selectedPort = new SerialPort({
       path: payload.path,
-      baudRate: 115200,
+      baudRate: payload.baudRate,
     })  
 
     // selectedPort.open((err) => {
@@ -64,7 +64,18 @@ app.whenReady().then(() => {
       })
     })
 
-  ipcMain.on('com:send', async (_event, payload: { command: string }) => {    
+  ipcMain.on('com:disconnect', async () => {
+    if (selectedPort && selectedPort.isOpen) {
+      selectedPort.close((err) => {
+        if (err) {
+          console.error('Erro ao fechar a porta:', err)
+        }
+      })
+    }
+    selectedPort = null
+  })
+
+  ipcMain.on('com:send', async (_event, payload: { command: string }) => {
     selectedPort!.write(payload.command, (err) => {
       if(err){
         console.error('Erro ao enviar comando:', err)

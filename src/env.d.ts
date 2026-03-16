@@ -9,7 +9,8 @@ interface ComBridgeApi {
   listPorts: () => Promise<SerialPortInfo[]>
   sendCommand: (command: string) => Promise<{ ok: boolean }>
   onData: (handleData: (data: string) => void) => void
-  connect: (path: string) => void
+  connect: (path: string, baudRate: number) => void
+  disconnect: () => void
   send: (command: string) => void
 }
 

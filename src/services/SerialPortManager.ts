@@ -6,7 +6,8 @@ interface SerialPortInfo {
 interface ISerialPortManager {
   listPorts: () => Promise<SerialPortInfo[]>;
   onData: (handleData: (data: string) => void) => void;
-  connect: (path: string) => void;
+  connect: (path: string, baudRate: number) => void;
+  disconnect: () => void;
   send: (command: string) => void;
 }
 
@@ -17,8 +18,11 @@ class SerialPortElectron implements ISerialPortManager {
   onData(handleData: (data: string) => void): void {
     window.comBridge!.onData(handleData);
   }
-  connect(path: string) {
-    window.comBridge!.connect(path);
+  connect(path: string, baudRate: number) {
+    window.comBridge!.connect(path, baudRate);
+  }
+  disconnect() {
+    window.comBridge!.disconnect();
   }
   send(command: string) {
     window.comBridge!.send(command);
@@ -72,15 +76,39 @@ class SerialPortWeb implements ISerialPortManager {
     this.dataHandler = handleData;
   }
 
-  connect(path: string): void {
+  connect(path: string, baudRate: number): void {
     const port = this.ports.get(path);
     if (!port) return;
 
-    port.open({ baudRate: 115200 }).then(() => {
+    port.open({ baudRate }).then(() => {
       this.activePort = port;
       this.writer = port.writable!.getWriter();
       this.startReadLoop(port);
     });
+  }
+
+  async disconnect(): Promise<void> {
+    try {
+      if (this.reader) {
+        await this.reader.cancel();
+        this.reader.releaseLock();
+        this.reader = null;
+      }
+      if (this.writer) {
+        await this.writer.close();
+        this.writer.releaseLock();
+        this.writer = null;
+      }
+      if (this.activePort) {
+        await this.activePort.close();
+        this.activePort = null;
+      }
+    } catch {
+      // Port may already be closed
+      this.reader = null;
+      this.writer = null;
+      this.activePort = null;
+    }
   }
 
   send(command: string): void {
@@ -136,7 +164,8 @@ class SerialPortMock implements ISerialPortManager {
     return Promise.resolve([]);
   }
   onData(_handleData: (data: string) => void): void {}
-  connect(_path: string): void {}
+  connect(_path: string, _baudRate: number): void {}
+  disconnect(): void {}
   send(_command: string): void {}
 }
 

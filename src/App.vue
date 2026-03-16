@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, provide, computed, toRef } from 'vue'
+import { onMounted, provide, computed } from 'vue'
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -27,6 +27,7 @@ function sendCommand(cmd: string) {
 // --- Provide to children ---
 provide('ports', serial.ports)
 provide('selectedPath', serial.selectedPath)
+provide('selectedBaudRate', serial.selectedBaudRate)
 provide('connectedPath', serial.connectedPath)
 provide('connectionStatus', serial.connectionStatus)
 provide('refreshPorts', serial.refreshPorts)
@@ -36,14 +37,20 @@ provide('connect', () => {
     logStore.appendLog(data)
   })
 })
+provide('disconnect', () => {
+  serial.disconnect()
+  logStore.appendLog('Disconnected.', 'system')
+})
 
 provide('filteredLogs', logStore.filteredLogs)
+provide('filteredFrozenSnapshot', logStore.filteredFrozenSnapshot)
 provide('isFrozen', logStore.isFrozen)
-provide('bufferedCount', logStore.bufferedCount)
 provide('highlightTerms', logStore.highlightTerms)
 provide('showOnlyHighlighted', logStore.showOnlyHighlighted)
 provide('errorIndices', logStore.errorIndices)
 provide('warnIndices', logStore.warnIndices)
+provide('frozenErrorIndices', logStore.frozenErrorIndices)
+provide('frozenWarnIndices', logStore.frozenWarnIndices)
 provide('setFrozen', logStore.setFrozen)
 provide('clearLogs', logStore.clearLogs)
 provide('addHighlightTerm', logStore.addHighlightTerm)

@@ -6,6 +6,7 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 export function useSerialConnection() {
   const ports = ref<SerialPortInfo[]>([])
   const selectedPath = ref('')
+  const selectedBaudRate = ref(115200)
   const connectedPath = ref('')
   const connectionStatus: Ref<ConnectionStatus> = ref('disconnected')
 
@@ -20,9 +21,15 @@ export function useSerialConnection() {
   function connect() {
     if (connectedPath.value === selectedPath.value) return
     connectionStatus.value = 'connecting'
-    serialPortManager.connect(selectedPath.value)
+    serialPortManager.connect(selectedPath.value, selectedBaudRate.value)
     connectedPath.value = selectedPath.value
     connectionStatus.value = 'connected'
+  }
+
+  function disconnect() {
+    serialPortManager.disconnect()
+    connectedPath.value = ''
+    connectionStatus.value = 'disconnected'
   }
 
   function send(cmd: string) {
@@ -36,10 +43,12 @@ export function useSerialConnection() {
   return {
     ports,
     selectedPath,
+    selectedBaudRate,
     connectedPath,
     connectionStatus,
     refreshPorts,
     connect,
+    disconnect,
     send,
     onData,
   }

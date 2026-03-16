@@ -14,11 +14,9 @@ function classifyLevel(text: string): LogEntry['level'] {
 export function useLogStore() {
   const logs = shallowRef<LogEntry[]>([])
   const isFrozen = ref(false)
-  const buffer = ref<LogEntry[]>([])
+  const frozenSnapshot = shallowRef<LogEntry[]>([])
   const highlightTerms = ref<HighlightTerm[]>([])
   const showOnlyHighlighted = ref(false)
-
-  const bufferedCount = computed(() => buffer.value.length)
 
   function appendLog(text: string, level?: LogEntry['level'], source?: string) {
     const entry: LogEntry = {
@@ -29,11 +27,6 @@ export function useLogStore() {
       source,
     }
 
-    if (isFrozen.value) {
-      buffer.value.push(entry)
-      return
-    }
-
     const arr = logs.value.slice()
     arr.unshift(entry)
     if (arr.length > MAX_LOGS) arr.length = MAX_LOGS
@@ -41,55 +34,53 @@ export function useLogStore() {
     triggerRef(logs)
   }
 
-  function releaseFrozen() {
-    if (buffer.value.length === 0) return
-    const arr = [...buffer.value.reverse(), ...logs.value]
-    if (arr.length > MAX_LOGS) arr.length = MAX_LOGS
-    buffer.value = []
-    logs.value = arr
-    triggerRef(logs)
-  }
-
   function setFrozen(val: boolean) {
     isFrozen.value = val
-    if (!val) releaseFrozen()
+    if (val) {
+      frozenSnapshot.value = logs.value.slice()
+      triggerRef(frozenSnapshot)
+    } else {
+      frozenSnapshot.value = []
+      triggerRef(frozenSnapshot)
+    }
   }
 
   function clearLogs() {
     logs.value = []
-    buffer.value = []
+    frozenSnapshot.value = []
+    isFrozen.value = false
     triggerRef(logs)
+    triggerRef(frozenSnapshot)
   }
 
-  const filteredLogs = computed(() => {
+  function applyHighlightFilter(list: LogEntry[]): LogEntry[] {
     if (!showOnlyHighlighted.value || highlightTerms.value.length === 0) {
-      return logs.value
+      return list
     }
-    return logs.value.filter((entry) =>
+    return list.filter((entry) =>
       highlightTerms.value.some(({ term }) => {
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         return new RegExp(escaped, 'i').test(entry.text)
       }),
     )
-  })
+  }
 
-  const errorIndices = computed(() => {
+  const filteredLogs = computed(() => applyHighlightFilter(logs.value))
+
+  const filteredFrozenSnapshot = computed(() => applyHighlightFilter(frozenSnapshot.value))
+
+  function computeIndices(list: LogEntry[], level: string): number[] {
     const indices: number[] = []
-    const list = filteredLogs.value
     for (let i = 0; i < list.length; i++) {
-      if (list[i].level === 'error') indices.push(i)
+      if (list[i].level === level) indices.push(i)
     }
     return indices
-  })
+  }
 
-  const warnIndices = computed(() => {
-    const indices: number[] = []
-    const list = filteredLogs.value
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].level === 'warn') indices.push(i)
-    }
-    return indices
-  })
+  const errorIndices = computed(() => computeIndices(filteredLogs.value, 'error'))
+  const warnIndices = computed(() => computeIndices(filteredLogs.value, 'warn'))
+  const frozenErrorIndices = computed(() => computeIndices(filteredFrozenSnapshot.value, 'error'))
+  const frozenWarnIndices = computed(() => computeIndices(filteredFrozenSnapshot.value, 'warn'))
 
   function addHighlightTerm(term: string) {
     if (!term || highlightTerms.value.some((t) => t.term === term)) return
@@ -105,11 +96,14 @@ export function useLogStore() {
     logs,
     filteredLogs,
     isFrozen,
-    bufferedCount,
+    frozenSnapshot,
+    filteredFrozenSnapshot,
     highlightTerms,
     showOnlyHighlighted,
     errorIndices,
     warnIndices,
+    frozenErrorIndices,
+    frozenWarnIndices,
     appendLog,
     clearLogs,
     setFrozen,

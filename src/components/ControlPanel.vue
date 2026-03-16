@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { inject, type Ref } from 'vue'
-import { Plug, RefreshCw } from 'lucide-vue-next'
+import { inject, computed, type Ref } from 'vue'
+import { Plug, Unplug, RefreshCw } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -14,10 +14,20 @@ import type { ConnectionStatus } from '@/composables/useSerialConnection'
 
 const ports = inject<Ref<SerialPortInfo[]>>('ports')!
 const selectedPath = inject<Ref<string>>('selectedPath')!
+const selectedBaudRate = inject<Ref<number>>('selectedBaudRate')!
 const connectionStatus = inject<Ref<ConnectionStatus>>('connectionStatus')!
 const logCount = inject<Ref<number>>('logCount')!
 const refreshPorts = inject<() => Promise<SerialPortInfo[]>>('refreshPorts')!
 const connect = inject<() => void>('connect')!
+const disconnect = inject<() => void>('disconnect')!
+
+const isConnected = computed(() => connectionStatus.value === 'connected')
+
+const baudRates = ['300', '1200', '2400', '4800', '9600', '19200', '38400', '57600', '115200', '230400', '460800', '921600']
+const baudRateModel = computed({
+  get: () => String(selectedBaudRate.value),
+  set: (v: string) => { selectedBaudRate.value = Number(v) },
+})
 </script>
 
 <template>
@@ -28,8 +38,8 @@ const connect = inject<() => void>('connect')!
 
     <div class="w-px h-5 bg-zinc-800" />
 
-    <Select v-model="selectedPath">
-      <SelectTrigger class="w-48 h-8 text-xs">
+    <Select v-model="selectedPath" :disabled="isConnected">
+      <SelectTrigger class="w-48 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
         <SelectValue placeholder="Select port" />
       </SelectTrigger>
       <SelectContent>
@@ -43,24 +53,36 @@ const connect = inject<() => void>('connect')!
       size="xs"
       variant="ghost"
       class="h-8 w-8 p-0"
+      :disabled="isConnected"
       @click="refreshPorts"
     >
       <RefreshCw class="h-3.5 w-3.5" />
     </Button>
 
     <Button
+      v-if="!isConnected"
       size="xs"
       variant="industrial"
       class="h-8 px-3"
       :class="{
         'animate-glow-pulse': connectionStatus === 'connecting',
-        'shadow-glow-success border-emerald-700': connectionStatus === 'connected',
       }"
-      :disabled="!selectedPath || connectionStatus === 'connected'"
+      :disabled="!selectedPath"
       @click="connect"
     >
       <Plug class="h-3.5 w-3.5" />
-      <span>{{ connectionStatus === 'connected' ? 'Connected' : 'Connect' }}</span>
+      <span>Connect</span>
+    </Button>
+
+    <Button
+      v-else
+      size="xs"
+      variant="destructive"
+      class="h-8 px-3"
+      @click="disconnect"
+    >
+      <Unplug class="h-3.5 w-3.5" />
+      <span>Disconnect</span>
     </Button>
 
     <Badge
@@ -74,7 +96,16 @@ const connect = inject<() => void>('connect')!
       {{ connectionStatus === 'connected' ? selectedPath : 'Disconnected' }}
     </Badge>
 
-    <span class="text-xs text-muted-foreground">115200 baud</span>
+    <Select v-model="baudRateModel" :disabled="isConnected">
+      <SelectTrigger class="w-32 h-8 text-xs" :class="{ 'opacity-50 cursor-not-allowed': isConnected }">
+        <SelectValue placeholder="Baud rate" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem v-for="rate in baudRates" :key="rate" :value="rate">
+          {{ rate }} baud
+        </SelectItem>
+      </SelectContent>
+    </Select>
 
     <div class="flex-1" />
 
